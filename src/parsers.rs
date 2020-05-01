@@ -1,109 +1,53 @@
-#[derive(Debug)]
-pub struct ParserState {
-    pub index: usize,
-    pub result: Option<String>,
-    pub error: bool,
-    pub err_msg: Option<String>
-}
-
-
-pub struct Parser {
-    pub substr: String,
-    pub state: ParserState,
-}
-
-pub struct ParserArray {
-    pub parsers: Vec<Parser>,
-    pub state: ParserState
-}
-
-impl Parser {
-    pub fn new(substr: String) -> Self {
-        Parser{
-            substr: substr,
-            state: ParserState {
-                index: 0,
-                result: None,
+use crate::parser::*;
+/*
+    TODO: str_parser and seq_parser return parser states. 
+    Edit so that they only modify a parser's inner state
+*/
+#[allow(dead_code)]
+pub fn str_parser(needle: String) -> impl Fn(ParserState) -> ParserState {
+    move |mut state: ParserState| {
+        let target_string = state.target;
+        let index = state.index;
+        if target_string[index..index + needle.len()] == needle {
+            state = ParserState {
+                target: target_string,
+                index: index + needle.len(),
+                result: vec![needle.clone()],
                 error: false,
                 err_msg: None
             }
-        }
-    }
-
-    pub fn run(&mut self, corpus: String) {
-        let new_state;
-        if corpus.len() < self.substr.len() {
-            new_state = ParserState {
-                index: 0,
-                result: None,
-                error: true,
-                err_msg: Some(String::from("Corpus is of smaller length than target string")),
-            };
         } else {
-            if corpus[..self.substr.len()] == self.substr {
-                new_state = ParserState {
-                    index: self.state.index + self.substr.len(),
-                    result: Some(corpus[self.state.index..self.state.index + self.substr.len()].to_string()),
-                    error: false,
-                    err_msg: None,
-                };
-            } else {
-                new_state = ParserState {
-                    index: 0,
-                    result: None,
-                    error: true,
-                    err_msg: Some(String::from("Target string not found in corpus")),
-                };
-            }
-        }
-        self.state = new_state;
-        ()
-    }
-}
-
-impl ParserArray {
-    pub fn new(parsers: Vec<Parser>) -> Self {
-        ParserArray {
-            parsers: parsers,
-            state: ParserState {
+            state = ParserState {
+                target: String::from(""),
                 index: 0,
-                result: None,
-                error: false,
-                err_msg: None
+                result: vec![],
+                error: true,
+                err_msg: Some(String::from("Error"))
             }
         }
-    }
-
-    pub fn run(&mut self, corpus: String) {
-        for parser in &self.parsers {
-            let new_state;
-            let dif = corpus.len() - self.state.index;
-            if dif < parser.substr.len() {
-                new_state = ParserState {
-                    index: 0,
-                    result: None,
-                    error: true,
-                    err_msg: Some(String::from("Corpus is of smaller length than target string")),
-                };
-            } else {
-                if corpus[self.state.index..self.state.index + parser.substr.len()] == parser.substr {
-                    new_state = ParserState {
-                        index: self.state.index + parser.substr.len(),
-                        result: Some(corpus[self.state.index..self.state.index + parser.substr.len()].to_string()),
-                        error: false,
-                        err_msg: None,
-                    };
-                } else {
-                    new_state = ParserState {
-                        index: 0,
-                        result: None,
-                        error: true,
-                        err_msg: Some(String::from("Target string not found in corpus")),
-                    };
-                }
-            }
-            self.state = new_state;
-        }
-        println!("{:?}", self.state)
+        state
     }
 }
+
+#[allow(dead_code)]
+pub fn seq_parser<F>(parsers: &[Parser<F>]) -> impl Fn(ParserState) -> ParserState + '_
+    where F: Fn(ParserState) -> ParserState {
+    move |state: ParserState| {
+        let mut results: Vec<String> = Vec::with_capacity(parsers.len());
+        let mut next_state = state;
+        for parser in parsers {
+            next_state = (parser.transformer)(next_state);
+            results.push(next_state.clone().result[0].clone());
+        }
+        next_state.result = results;
+        next_state
+    }
+}
+
+// pub fn letters_parser() -> impl Fn(ParserState) -> ParserState {
+//     unimplemented!()
+// }
+
+// pub fn digits_parser() -> impl Fn(ParserState) -> ParserState {
+//     unimplemented!()
+// }
